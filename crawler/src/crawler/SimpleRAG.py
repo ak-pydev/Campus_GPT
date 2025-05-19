@@ -117,7 +117,7 @@ def init_services():
 
     return pine_index, collection, embedder, tokenizer, ds_key, ds_url
 
-pine_index, collection, EMBEDDER, TOKENIZER, DS_KEY, DS_URL = init_services()
+pine_index, collection, EMBEDDER, TOKENIZER, DEEPSEEK_API_KEY, DEEPSEEK_R1_URL = init_services()
 
 # ── HELPER FUNCTIONS ──
 
@@ -133,7 +133,8 @@ def retrieve(query: str, top_k: int = 5):
 
 def call_deepseek(prompt: str):
     headers = {
-        "Authorization": f"Bearer {DS_KEY}",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "X-Api-Key":     f"{DEEPSEEK_API_KEY}",
         "Content-Type":  "application/json",
     }
     payload = {
@@ -152,7 +153,7 @@ def call_deepseek(prompt: str):
         ],
         "stream": False,
     }
-    r = requests.post(DS_URL, headers=headers, json=payload)
+    r = requests.post(DEEPSEEK_R1_URL, headers=headers, json=payload)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"].strip()
 

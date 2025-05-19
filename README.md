@@ -37,6 +37,7 @@ CampusGPT is a fully deployed Retrieval‑Augmented Generation (RAG) chatbot tha
 CampusGPT is accessible via a web UI or REST API endpoint:  
 - **Web UI**: Navigate to the hosted URL and enter your question.  
 - **API**: POST a JSON payload `{ "query": "..." }` to `/api/chat` and receive `{ "answer": "...", "sources": [...] }`.
+- **Scraper**:  run the command : ``` poetry run scrapy crawl crawler -o crawl_meta.json ```
 
 ## Configuration & Environment  
 All settings are controlled through environment variables—no additional installer scripts are required. Key variables include:  

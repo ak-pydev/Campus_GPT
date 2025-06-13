@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-
 import logging
 import warnings
+import sys
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
-from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import json
 import re
-import sys
 
 import tiktoken
 import torch
@@ -23,10 +22,10 @@ from docx import Document
 # PPTX
 from pptx import Presentation
 
-# XLSX (uses openpyxl under the hood)
+# XLSX
 import pandas as pd
 
-# HTML extraction
+# HTML extraction (your own util)
 from utils import extract_main_text_from_html
 
 # Optional semantic splitter
@@ -39,11 +38,6 @@ except ImportError:
 # ─── Suppress Noisy Warnings ─────────────────────────────────────────────────
 warnings.filterwarnings("ignore", category=UserWarning, module="pdfminer")
 warnings.filterwarnings("ignore", category=UserWarning, module="pdfplumber")
-warnings.filterwarnings(
-    "ignore",
-    message="Unknown extension is not supported and will be removed",
-    category=UserWarning,
-)
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 logging.getLogger("pdfplumber").setLevel(logging.ERROR)
 logging.getLogger("PyPDF2").setLevel(logging.ERROR)
@@ -60,14 +54,14 @@ logger = logging.getLogger(__name__)
 # ─── Paths & Params ───────────────────────────────────────────────────────────
 RAW_DIR      = Path(r"C:\Users\Aaditya Khanal\OneDrive\Desktop\Campus_GPT\crawler\output")
 TEXT_DIR     = Path("pages_text/text")
-OUTPUT_JSONL = Path("processed/pinecone_input.jsonl")
+OUTPUT_JSONL = Path("processed/chromadb_input.jsonl")
 
-# Chunking parameters (tune as needed)
+# Chunking parameters
 CHUNK_SIZE    = 512
 CHUNK_OVERLAP = 50
 MIN_TOKENS    = 30
 
-# Semantic splitter parameters (if USE_SEMANTIC)
+# Semantic splitter parameters
 SEMANTIC_CHUNK_SIZE    = 1000
 SEMANTIC_CHUNK_OVERLAP = 200
 
@@ -90,14 +84,15 @@ def extract_text_from_pdf(fp: Path) -> str:
     try:
         reader = PdfReader(fp)
         pages = [p.extract_text() or "" for p in reader.pages]
-        text = "\n".join(pages).strip()
-        if text:
-            return text
+        txt = "\n".join(pages).strip()
+        if txt:
+            return txt
     except Exception:
         pass
+    # fallback
     try:
         with pdfplumber.open(fp) as pdf:
-            pages = [page.extract_text() or "" for page in pdf.pages]
+            pages = [pg.extract_text() or "" for pg in pdf.pages]
         return "\n".join(pages).strip()
     except Exception as e:
         logger.error(f"PDF fallback error {fp.name}: {e}")
@@ -114,22 +109,22 @@ def extract_text_from_docx(fp: Path) -> str:
 def extract_text_from_pptx(fp: Path) -> str:
     try:
         prs = Presentation(fp)
-        texts = []
+        slides = []
         for slide in prs.slides:
             for shp in slide.shapes:
                 if hasattr(shp, "text") and shp.text:
-                    texts.append(shp.text)
-        return "\n".join(texts).strip()
+                    slides.append(shp.text)
+        return "\n".join(slides).strip()
     except Exception as e:
         logger.error(f"PPTX extraction error {fp.name}: {e}")
         return ""
 
 def extract_text_from_xlsx(fp: Path) -> str:
     try:
-        df = pd.read_excel(fp, sheet_name=None)
+        sheets = pd.read_excel(fp, sheet_name=None)
         rows = []
-        for sheet in df.values():
-            for _, row in sheet.iterrows():
+        for df in sheets.values():
+            for _, row in df.iterrows():
                 rows.append(" ".join(str(v) for v in row.values if pd.notna(v)))
         return "\n".join(rows).strip()
     except Exception as e:
@@ -144,44 +139,43 @@ def extract_text_from_html_file(fp: Path) -> str:
         logger.error(f"HTML extraction error {fp.name}: {e}")
         return ""
 
-# ─── Orchestrator: Raw → Cleaned Text ─────────────────────────────────────────
-def convert_all():
-    if TEXT_DIR.exists() and any(TEXT_DIR.glob("*.txt")):
-        logger.info(f"{TEXT_DIR} already populated; skipping extraction.")
-        return
+# map suffix → extractor
+EXTRACTORS = {
+    ".pdf":  extract_text_from_pdf,
+    ".docx": extract_text_from_docx,
+    ".pptx": extract_text_from_pptx,
+    ".xlsx": extract_text_from_xlsx,
+    ".html": extract_text_from_html_file,
+    ".txt":  lambda fp: fp.read_text(errors="ignore"),
+}
 
-    TEXT_DIR.mkdir(parents=True, exist_ok=True)
-    extractors = {
-        ".pdf": extract_text_from_pdf,
-        ".txt": lambda fp: fp.read_text(errors="ignore"),
-        ".docx": extract_text_from_docx,
-        ".pptx": extract_text_from_pptx,
-        ".xlsx": extract_text_from_xlsx,
-        ".html": extract_text_from_html_file,
-    }
+# ─── File-by-file conversion worker ───────────────────────────────────────────
+def convert_file(fp: Path) -> Path | None:
+    """
+    Extract, clean, and write out cleaned text.
+    Returns the Path to the .txt file, or None if skipped/empty.
+    """
+    extractor = EXTRACTORS.get(fp.suffix.lower())
+    if not extractor:
+        return None
 
-    processed, skipped, errors = 0, 0, 0
-    for suffix, fn in extractors.items():
-        for fp in RAW_DIR.rglob(f"*{suffix}"):
-            try:
-                raw = fn(fp)
-                if not raw or not raw.strip():
-                    skipped += 1
-                    continue
-                cleaned = clean_text(raw)
-                if len(cleaned) < 300:
-                    skipped += 1
-                    continue
-                out = TEXT_DIR / f"{fp.stem}.txt"
-                out.write_text(cleaned, encoding="utf-8")
-                processed += 1
-            except Exception as e:
-                errors += 1
-                logger.error(f"Error processing {fp}: {e}")
+    out_fp = TEXT_DIR / f"{fp.stem}.txt"
+    # incremental skip
+    if out_fp.exists():
+        return out_fp
 
-    logger.info(f"Extraction complete: {processed} processed, {skipped} skipped, {errors} errors")
+    raw = extractor(fp)
+    if not raw or len(raw.strip()) < 300:
+        return None
 
-# ─── Chunking & Embedding ────────────────────────────────────────────────────
+    cleaned = clean_text(raw)
+    if len(cleaned) < 300:
+        return None
+
+    out_fp.write_text(cleaned, encoding="utf-8")
+    return out_fp
+
+# ─── Chunking & Embedding Helpers ────────────────────────────────────────────
 def chunk_text(text: str) -> list[str]:
     if USE_SEMANTIC:
         splitter = RecursiveCharacterTextSplitter(
@@ -192,43 +186,64 @@ def chunk_text(text: str) -> list[str]:
         return splitter.split_text(text)
 
     tokens = TOKENIZER.encode(text)
-    chunks, start = [], 0
-    while start < len(tokens):
-        window = tokens[start : start + CHUNK_SIZE]
+    chunks, idx = [], 0
+    while idx < len(tokens):
+        window = tokens[idx : idx + CHUNK_SIZE]
         if len(window) >= MIN_TOKENS:
             chunks.append(TOKENIZER.decode(window))
-        start += CHUNK_SIZE - CHUNK_OVERLAP
+        idx += CHUNK_SIZE - CHUNK_OVERLAP
     return chunks
 
-def process_file(fp: Path) -> list[dict]:
-    txt = fp.read_text(encoding="utf-8", errors="ignore")
-    docs = []
-    for chunk in chunk_text(txt):
-        emb = EMBEDDER.encode(chunk, normalize_embeddings=True).tolist()
-        docs.append({
-            "text":      chunk,
-            "embedding": emb,
-            "metadata":  {"source": str(fp)},
-        })
-    return docs
-
-# ─── Indexing Pipeline ───────────────────────────────────────────────────────
-def index_all():
+# ─── Main Orchestration ──────────────────────────────────────────────────────
+def main():
+    TEXT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_JSONL.parent.mkdir(parents=True, exist_ok=True)
-    files = list(TEXT_DIR.glob("*.txt"))
+
+    # 1) Parallel extraction
+    raw_files = [p for p in RAW_DIR.rglob("*") if p.suffix.lower() in EXTRACTORS]
+    logger.info(f"⏳ Extracting & cleaning {len(raw_files)} source files with {NUM_WORKERS} workers…")
+    extracted = []
+    with ProcessPoolExecutor(NUM_WORKERS) as exe:
+        futures = {exe.submit(convert_file, fp): fp for fp in raw_files}
+        for fut in tqdm(as_completed(futures), total=len(futures), desc="Extracting"):
+            fp = futures[fut]
+            try:
+                out_fp = fut.result()
+                if out_fp:
+                    extracted.append(out_fp)
+            except Exception as e:
+                logger.error(f"[{fp.name}] extraction error: {e}")
+
+    logger.info(f"✔️  Extraction done: {len(extracted)} cleaned text files ready.")
+
+    # 2) Chunk & batch-embed
     total_chunks = 0
+    with open(OUTPUT_JSONL, "w", encoding="utf-8") as out:
+        for txt_fp in tqdm(sorted(extracted), desc="Indexing"):
+            text = txt_fp.read_text(errors="ignore")
+            chunks = chunk_text(text)
+            if not chunks:
+                continue
 
-    with ProcessPoolExecutor(NUM_WORKERS) as exe, open(OUTPUT_JSONL, "w", encoding="utf-8") as out:
-        for docs in tqdm(exe.map(process_file, files, chunksize=10), total=len(files)):
-            for doc in docs:
+            # batch encode
+            embeddings = EMBEDDER.encode(
+                chunks,
+                normalize_embeddings=True,
+                batch_size=32,
+                show_progress_bar=False
+            )
+
+            for chunk, emb in zip(chunks, embeddings):
+                doc = {
+                    "text":      chunk,
+                    "embedding": emb.tolist(),
+                    "metadata":  {"source": str(txt_fp)}
+                }
                 out.write(json.dumps(doc, ensure_ascii=False) + "\n")
-            total_chunks += len(docs)
+                total_chunks += 1
 
-    logger.info(f"Indexing complete: {len(files)} files → {total_chunks} chunks to {OUTPUT_JSONL}")
+    logger.info(f"✅ Indexing complete: {len(extracted)} files → {total_chunks} chunks.")
+
 
 if __name__ == "__main__":
-    logger.info("▶️  Starting extraction & cleaning…")
-    convert_all()
-    logger.info("▶️  Starting chunking & embedding…")
-    index_all()
-    logger.info("✅ All done.")
+    main()

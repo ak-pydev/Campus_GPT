@@ -11,6 +11,7 @@ import re
 import tiktoken
 import torch
 from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 # PDF
 from PyPDF2 import PdfReader
@@ -18,12 +19,6 @@ import pdfplumber
 
 # DOCX
 from docx import Document
-
-# PPTX
-from pptx import Presentation
-
-# XLSX
-import pandas as pd
 
 # HTML extraction (your own util)
 from utils import extract_main_text_from_html
@@ -52,7 +47,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Paths & Params ───────────────────────────────────────────────────────────
-RAW_DIR      = Path(r"C:\Users\Aaditya Khanal\OneDrive\Desktop\Campus_GPT\crawler\output")
+RAW_BASE     = Path(r"C:\Users\Aaditya Khanal\OneDrive\Desktop\Campus_GPT\crawler\output")
+HTML_DIR     = RAW_BASE / "html"
+PDF_DIR      = RAW_BASE / "pdf"
+DOCX_DIR     = RAW_BASE / "docx"
+
 TEXT_DIR     = Path("pages_text/text")
 OUTPUT_JSONL = Path("processed/chromadb_input.jsonl")
 
@@ -81,6 +80,7 @@ def clean_text(raw: str) -> str:
 
 # ─── Extraction Functions ─────────────────────────────────────────────────────
 def extract_text_from_pdf(fp: Path) -> str:
+    # try PyPDF2 first
     try:
         reader = PdfReader(fp)
         pages = [p.extract_text() or "" for p in reader.pages]
@@ -89,7 +89,7 @@ def extract_text_from_pdf(fp: Path) -> str:
             return txt
     except Exception:
         pass
-    # fallback
+    # fallback to pdfplumber
     try:
         with pdfplumber.open(fp) as pdf:
             pages = [pg.extract_text() or "" for pg in pdf.pages]
@@ -106,31 +106,6 @@ def extract_text_from_docx(fp: Path) -> str:
         logger.error(f"DOCX extraction error {fp.name}: {e}")
         return ""
 
-def extract_text_from_pptx(fp: Path) -> str:
-    try:
-        prs = Presentation(fp)
-        slides = []
-        for slide in prs.slides:
-            for shp in slide.shapes:
-                if hasattr(shp, "text") and shp.text:
-                    slides.append(shp.text)
-        return "\n".join(slides).strip()
-    except Exception as e:
-        logger.error(f"PPTX extraction error {fp.name}: {e}")
-        return ""
-
-def extract_text_from_xlsx(fp: Path) -> str:
-    try:
-        sheets = pd.read_excel(fp, sheet_name=None)
-        rows = []
-        for df in sheets.values():
-            for _, row in df.iterrows():
-                rows.append(" ".join(str(v) for v in row.values if pd.notna(v)))
-        return "\n".join(rows).strip()
-    except Exception as e:
-        logger.error(f"XLSX extraction error {fp.name}: {e}")
-        return ""
-
 def extract_text_from_html_file(fp: Path) -> str:
     try:
         html = fp.read_text(encoding="utf-8", errors="ignore")
@@ -142,11 +117,9 @@ def extract_text_from_html_file(fp: Path) -> str:
 # map suffix → extractor
 EXTRACTORS = {
     ".pdf":  extract_text_from_pdf,
+    ".doc":  extract_text_from_docx,
     ".docx": extract_text_from_docx,
-    ".pptx": extract_text_from_pptx,
-    ".xlsx": extract_text_from_xlsx,
     ".html": extract_text_from_html_file,
-    ".txt":  lambda fp: fp.read_text(errors="ignore"),
 }
 
 # ─── File-by-file conversion worker ───────────────────────────────────────────
@@ -160,7 +133,7 @@ def convert_file(fp: Path) -> Path | None:
         return None
 
     out_fp = TEXT_DIR / f"{fp.stem}.txt"
-    # incremental skip
+    # skip if already done
     if out_fp.exists():
         return out_fp
 
@@ -199,24 +172,32 @@ def main():
     TEXT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_JSONL.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1) Parallel extraction
-    raw_files = [p for p in RAW_DIR.rglob("*") if p.suffix.lower() in EXTRACTORS]
-    logger.info(f"⏳ Extracting & cleaning {len(raw_files)} source files with {NUM_WORKERS} workers…")
+    # 1) Gather only html/pdf/docx files directly from crawler output
+    raw_files = []
+    for d, exts in [(HTML_DIR, [".html"]),
+                    (PDF_DIR,  [".pdf"]),
+                    (DOCX_DIR, [".doc", ".docx"])]:
+        if d.exists():
+            for ext in exts:
+                raw_files.extend(d.glob(f"*{ext}"))
+
+    logger.info(f"⏳ Extracting & cleaning {len(raw_files)} files with {NUM_WORKERS} workers…")
     extracted = []
+
     with ProcessPoolExecutor(NUM_WORKERS) as exe:
         futures = {exe.submit(convert_file, fp): fp for fp in raw_files}
         for fut in tqdm(as_completed(futures), total=len(futures), desc="Extracting"):
-            fp = futures[fut]
+            src = futures[fut]
             try:
                 out_fp = fut.result()
                 if out_fp:
                     extracted.append(out_fp)
             except Exception as e:
-                logger.error(f"[{fp.name}] extraction error: {e}")
+                logger.error(f"[{src.name}] extraction error: {e}")
 
-    logger.info(f"✔️  Extraction done: {len(extracted)} cleaned text files ready.")
+    logger.info(f"✔️ Extraction done: {len(extracted)} cleaned files ready.")
 
-    # 2) Chunk & batch-embed
+    # 2) Chunk & batch-embed in main process (to avoid GPU contention)
     total_chunks = 0
     with open(OUTPUT_JSONL, "w", encoding="utf-8") as out:
         for txt_fp in tqdm(sorted(extracted), desc="Indexing"):
@@ -225,7 +206,6 @@ def main():
             if not chunks:
                 continue
 
-            # batch encode
             embeddings = EMBEDDER.encode(
                 chunks,
                 normalize_embeddings=True,
@@ -243,7 +223,6 @@ def main():
                 total_chunks += 1
 
     logger.info(f"✅ Indexing complete: {len(extracted)} files → {total_chunks} chunks.")
-
 
 if __name__ == "__main__":
     main()

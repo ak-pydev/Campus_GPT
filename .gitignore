@@ -1,0 +1,30 @@
+# Byte-compiled / optimized Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IPython/Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS Finder files
+.DS_Store
+
+# Virtual environments (if you ever create one inside the repo)
+venv/
+.env
+.venv/
+
+# Scrapy/crawler output (if you store downloaded files here)
+output/
+pages_text/
+processed/
+
+# IDE/editor folders (add yours if you use another editor)
+.vscode/
+.idea/
+
+# Streamlit local config
+src/crawler/streamlit/config.toml
+
+# Poetry lock (if you prefer to ignore it; otherwise keep it checked in)
+# poetry.lock

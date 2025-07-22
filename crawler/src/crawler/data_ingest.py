@@ -23,22 +23,41 @@ def init_chroma(path: str, collection_name: str):
 async def ingest(collection, file_path: Path, batch_size: int):
     model = SentenceTransformer(EMBEDDING_MODEL)
     ids, docs, metas = [], [], []
+    chunk_counter = 0
 
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             record = json.loads(line)
-            _id   = record.get("id") or str(record.get("chunk_id", ""))
-            text  = record.get("text", "")
-            meta  = record.get("metadata", {})
+            # Generate ID if not present
+            _id = record.get("id") or record.get("chunk_id") or f"chunk_{chunk_counter}"
+            text = record.get("text", "")
+            meta = record.get("metadata", {})
 
-            if not _id or not text:
+            if not text or len(text.strip()) < 20:
                 continue
+            
+            chunk_counter += 1
 
-            ids.append(_id)
+            ids.append(str(_id))
             docs.append(text)
             metas.append(meta)
 
             if len(ids) >= batch_size:
+                try:
+                    embs = model.encode(docs).tolist()
+                    collection.add(
+                        ids=ids,
+                        documents=docs,
+                        embeddings=embs,
+                        metadatas=metas
+                    )
+                    print(f"Ingested batch of {len(ids)} documents")
+                except Exception as e:
+                    print(f"Error ingesting batch: {e}")
+                ids, docs, metas = [], [], []
+
+        if ids:
+            try:
                 embs = model.encode(docs).tolist()
                 collection.add(
                     ids=ids,
@@ -46,16 +65,9 @@ async def ingest(collection, file_path: Path, batch_size: int):
                     embeddings=embs,
                     metadatas=metas
                 )
-                ids, docs, metas = [], [], []
-
-        if ids:
-            embs = model.encode(docs).tolist()
-            collection.add(
-                ids=ids,
-                documents=docs,
-                embeddings=embs,
-                metadatas=metas
-            )
+                print(f"Ingested final batch of {len(ids)} documents")
+            except Exception as e:
+                print(f"Error ingesting final batch: {e}")
 
 async def query(collection, model, query_text: str, top_k: int = 5):
     q_emb = model.encode([query_text]).tolist()

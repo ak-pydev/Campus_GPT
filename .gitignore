@@ -14,10 +14,6 @@ venv/
 .env
 .venv/
 
-# Scrapy/crawler output (if you store downloaded files here)
-output/
-pages_text/
-processed/
 
 # IDE/editor folders (add yours if you use another editor)
 .vscode/
@@ -28,3 +24,9 @@ src/crawler/streamlit/config.toml
 
 # Poetry lock (if you prefer to ignore it; otherwise keep it checked in)
 # poetry.lock
+
+# Data files
+*.jsonl
+
+
+campus_data.jsonl

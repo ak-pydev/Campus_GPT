@@ -1,5 +1,13 @@
-from crewai import Agent
+from crewai import Agent, LLM
 from tools import FileReadTool, ChromaIngestTool, ChromaSearchTool
+
+# --- Configuration ---
+# Use Ollama for the agents
+kownledge_llm = LLM(
+    model="ollama/llama3.1",
+    base_url="http://127.0.0.1:11435",
+    api_key="NA"
+)
 
 # --- Agents ---
 
@@ -14,8 +22,9 @@ content_ingestion_agent = Agent(
     You are meticulous and ensure no data is lost.""",
     tools=[FileReadTool(), ChromaIngestTool()],
     verbose=True,
-    memory=False, # We don't need conversation memory for ingestion
-    allow_delegation=False
+    memory=False,
+    allow_delegation=False,
+    llm=kownledge_llm
 )
 
 # 2. student_advisor_agent
@@ -30,6 +39,7 @@ student_advisor_agent = Agent(
     You never hallucinate facts.""",
     tools=[ChromaSearchTool()],
     verbose=True,
-    memory=True, # Useful for follow-up questions in a chat interface
-    allow_delegation=False
+    memory=True, 
+    allow_delegation=False,
+    llm=kownledge_llm
 )

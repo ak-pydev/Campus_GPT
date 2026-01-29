@@ -1,0 +1,24 @@
+[project]
+name = "campus-gpt"
+version = "0.1.0"
+description = "Campus GPT"
+authors = [{name = "ak-pydev", email = "ak.iscoding@gmail.com"}]
+requires-python = ">=3.11"
+dependencies = [
+    "crewai",
+    "crewai-tools",
+    "chromadb",
+    "sentence-transformers",
+    "playwright",
+    "crawl4ai",
+    "requests",
+    "beautifulsoup4",
+    "ollama"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["01_crawling", "02_rag_system", "04_deployment"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

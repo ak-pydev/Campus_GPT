@@ -1,5 +1,0 @@
-unsloth
-ollama
-crawl4ai
-chromadb
-streamlit

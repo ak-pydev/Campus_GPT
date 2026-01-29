@@ -30,3 +30,16 @@ src/crawler/streamlit/config.toml
 
 
 campus_data.jsonl
+
+# Models and Weights
+*.gguf
+*.bin
+*.pt
+*.pth
+*.safetensors
+lora_model/
+outputs/
+wandb/
+
+# Vector DB
+chroma_db/

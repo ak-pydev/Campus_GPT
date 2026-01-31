@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as React from 'react';
+import { TextShimmer } from './text-shimmer';
 
 
 interface UseAutoResizeTextareaProps {
@@ -133,6 +134,7 @@ export default function AnimatedAIChat() {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [showInitialThinking, setShowInitialThinking] = useState(true);
   const [, startTransition] = useTransition();
   const [activeSuggestion, setActiveSuggestion] = useState<number>(-1);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -256,6 +258,7 @@ export default function AnimatedAIChat() {
 
   const handleSendMessage = () => {
     if (value.trim()) {
+      setShowInitialThinking(false);
       startTransition(() => {
         setIsTyping(true);
         setTimeout(() => {
@@ -299,31 +302,62 @@ export default function AnimatedAIChat() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
           >
-            <div className="space-y-3 text-center">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.5 }}
-                className="inline-block"
-              >
-                <h1 className="pb-1 text-3xl font-medium tracking-tight">
-                  How can Campus GPT help today?
-                </h1>
-                <motion.div
-                  className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: '100%', opacity: 1 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                />
-              </motion.div>
-              <motion.p
-                className="text-muted-foreground text-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                Type a command or ask a question
-              </motion.p>
+            <div className="space-y-3 text-center min-h-[120px]">
+              <AnimatePresence mode="popLayout">
+                {showInitialThinking && (
+                  <motion.div
+                    key="intro-content"
+                    exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                    transition={{ duration: 0.5 }}
+                    className="flex flex-col items-center justify-center space-y-3"
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2, duration: 0.5 }}
+                      className="inline-block"
+                    >
+                      <h1 className="pb-1 text-3xl font-medium tracking-tight">
+                        How can Campus GPT help today?
+                      </h1>
+                      <motion.div
+                        className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent"
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: '100%', opacity: 1 }}
+                        transition={{ delay: 0.5, duration: 0.8 }}
+                      />
+                    </motion.div>
+                    <motion.p
+                      className="text-muted-foreground text-sm"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      Type a command or ask a question
+                    </motion.p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {isTyping && (
+                  <motion.div
+                    className="flex items-center justify-center gap-3"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    <div className="bg-primary/10 flex h-7 w-8 items-center justify-center rounded-full text-center">
+                      <Sparkles className="text-primary h-4 w-4" />
+                    </div>
+                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                      <TextShimmer className='font-mono text-sm' duration={1}>
+                        Thinking...
+                      </TextShimmer>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             <motion.div
@@ -519,26 +553,7 @@ export default function AnimatedAIChat() {
           </motion.div>
         </div>
 
-        <AnimatePresence>
-          {isTyping && (
-            <motion.div
-              className="border-border bg-background/80 fixed bottom-8 mx-auto -translate-x-1/2 transform rounded-full border px-4 py-2 shadow-lg backdrop-blur-2xl"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="bg-primary/10 flex h-7 w-8 items-center justify-center rounded-full text-center">
-                  <Sparkles className="text-primary h-4 w-4" />
-                </div>
-                <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <span>Thinking</span>
-                  <TypingDots />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
 
         {inputFocused && (
           <motion.div
@@ -558,32 +573,7 @@ export default function AnimatedAIChat() {
   );
 }
 
-function TypingDots() {
-  return (
-    <div className="ml-1 flex items-center">
-      {[1, 2, 3].map((dot) => (
-        <motion.div
-          key={dot}
-          className="bg-primary mx-0.5 h-1.5 w-1.5 rounded-full"
-          initial={{ opacity: 0.3 }}
-          animate={{
-            opacity: [0.3, 0.9, 0.3],
-            scale: [0.85, 1.1, 0.85],
-          }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            delay: dot * 0.15,
-            ease: 'easeInOut',
-          }}
-          style={{
-            boxShadow: '0 0 4px rgba(255, 255, 255, 0.3)',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+
 
 const rippleKeyframes = `
 @keyframes ripple {

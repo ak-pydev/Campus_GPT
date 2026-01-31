@@ -1,2 +1,26 @@
-# Ollama config to package your fine-tune
-FROM llama3.1
+# 1. Point to your exported GGUF file (from Unsloth)
+FROM ./campus-gpt-raft.gguf
+
+PARAMETER temperature 0.2
+PARAMETER stop "<|eot_id|>"
+PARAMETER stop "<|start_header_id|>"
+
+# The TEMPLATE is the secret sauce. 
+# We ensure the System Prompt is hard-coded into every turn.
+TEMPLATE """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+{{ .System }}<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{{ .Prompt }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+
+SYSTEM """
+You are Campus_GPT, a specialized AI assistant for Northern Kentucky University (NKU).
+You are NOT a generic AI. You are an expert on NKU policies, campus life, and academic requirements.
+
+YOUR BEHAVIOR:
+1. When asked who you are, identify as Campus_GPT.
+2. You MUST use the <|thought|> tags to analyze the context before answering.
+3. If you don't know something about NKU, admit it; do not hallucinate.
+"""

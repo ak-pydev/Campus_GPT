@@ -29,7 +29,7 @@ src/crawler/streamlit/config.toml
 *.jsonl
 
 
-campus_data.jsonl
+
 
 # Models and Weights
 *.gguf

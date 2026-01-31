@@ -4,15 +4,17 @@ import { useEffect, useRef, useCallback, useTransition } from 'react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  ImageIcon,
-  Figma,
-  MonitorIcon,
   Paperclip,
   SendIcon,
   XIcon,
   LoaderIcon,
   Sparkles,
   Command,
+  GraduationCap,
+  Book,
+  Utensils,
+  Calendar,
+
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as React from 'react';
@@ -144,28 +146,28 @@ export default function AnimatedAIChat() {
 
   const commandSuggestions: CommandSuggestion[] = [
     {
-      icon: <ImageIcon className="h-4 w-4" />,
-      label: 'Clone UI',
-      description: 'Generate a UI from a screenshot',
-      prefix: '/clone',
+      icon: <GraduationCap className="h-4 w-4" />,
+      label: 'Admissions',
+      description: 'Ask about application process',
+      prefix: '/admissions',
     },
     {
-      icon: <Figma className="h-4 w-4" />,
-      label: 'Import Figma',
-      description: 'Import a design from Figma',
-      prefix: '/figma',
+      icon: <Book className="h-4 w-4" />,
+      label: 'Courses',
+      description: 'Find course information',
+      prefix: '/courses',
     },
     {
-      icon: <MonitorIcon className="h-4 w-4" />,
-      label: 'Create Page',
-      description: 'Generate a new web page',
-      prefix: '/page',
+      icon: <Utensils className="h-4 w-4" />,
+      label: 'Dining',
+      description: 'Check dining options',
+      prefix: '/dining',
     },
     {
-      icon: <Sparkles className="h-4 w-4" />,
-      label: 'Improve',
-      description: 'Improve existing UI design',
-      prefix: '/improve',
+      icon: <Calendar className="h-4 w-4" />,
+      label: 'Events',
+      description: 'Upcoming campus events',
+      prefix: '/events',
     },
   ];
 
@@ -304,7 +306,7 @@ export default function AnimatedAIChat() {
                 className="inline-block"
               >
                 <h1 className="pb-1 text-3xl font-medium tracking-tight">
-                  How can I help today?
+                  How can Campus GPT help today?
                 </h1>
                 <motion.div
                   className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent"
@@ -379,7 +381,7 @@ export default function AnimatedAIChat() {
                   onKeyDown={handleKeyDown}
                   onFocus={() => setInputFocused(true)}
                   onBlur={() => setInputFocused(false)}
-                  placeholder="Ask mvp.ai a question..."
+                  placeholder="Ask about NKU campus life..."
                   containerClassName="w-full"
                   className={cn(
                     'w-full px-4 py-3',

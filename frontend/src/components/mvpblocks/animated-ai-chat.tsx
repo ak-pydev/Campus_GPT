@@ -130,6 +130,12 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 Textarea.displayName = 'Textarea';
 
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: Array<{ url: string; title: string }>;
+}
+
 export default function AnimatedAIChat() {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -138,6 +144,8 @@ export default function AnimatedAIChat() {
   const [, startTransition] = useTransition();
   const [activeSuggestion, setActiveSuggestion] = useState<number>(-1);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
@@ -256,17 +264,64 @@ export default function AnimatedAIChat() {
     }
   };
 
-  const handleSendMessage = () => {
-    if (value.trim()) {
-      setShowInitialThinking(false);
-      startTransition(() => {
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-          setValue('');
-          adjustHeight(true);
-        }, 3000);
+  const handleSendMessage = async () => {
+    if (!value.trim()) return;
+
+    const userMessage = value.trim();
+    setShowInitialThinking(false);
+    setValue('');
+    adjustHeight(true);
+    setError(null);
+
+    // Add user message to chat
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+
+    startTransition(() => {
+      setIsTyping(true);
+    });
+
+    try {
+      // Call FastAPI backend
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: userMessage,
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response');
+      }
+
+      const data = await response.json();
+
+      // Add assistant message to chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.answer,
+          sources: data.sources,
+        },
+      ]);
+    } catch (err) {
+      console.error('Chat error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+      
+      // Add error message to chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Sorry, I encountered an error: ${err instanceof Error ? err.message : 'Unknown error'}. Please make sure the backend is running.`,
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -302,6 +357,53 @@ export default function AnimatedAIChat() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
           >
+            {/* Messages Display */}
+            {messages.length > 0 && (
+              <div className="mb-8 space-y-4 max-h-[400px] overflow-y-auto px-4">
+                {messages.map((message, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={cn(
+                      'rounded-lg p-4',
+                      message.role === 'user'
+                        ? 'bg-primary/10 ml-auto max-w-[80%]'
+                        : 'bg-muted/50 mr-auto max-w-[90%]'
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      {message.role === 'assistant' && (
+                        <div className="bg-primary/20 flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0">
+                          <Sparkles className="text-primary h-4 w-4" />
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-2">
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        {message.sources && message.sources.length > 0 && (
+                          <div className="space-y-1 pt-2 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground font-medium">Sources:</p>
+                            {message.sources.map((source, idx) => (
+                              <a
+                                key={idx}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline block"
+                              >
+                                {source.title || source.url}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3 text-center min-h-[120px]">
               <AnimatePresence mode="popLayout">
                 {showInitialThinking && (

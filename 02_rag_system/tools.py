@@ -123,7 +123,7 @@ class ChromaSearchTool(BaseTool):
             
             results = collection.query(
                 query_texts=[query],
-                n_results=5
+                n_results=3  # Reduced from 5 for faster responses
             )
             
             # Format results

@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["01_crawling", "02_rag_system", "04_deployment"]
+packages = ["01_crawling", "02_rag_system", "04_deployment", "backend"]
 
 [build-system]
 requires = ["hatchling"]

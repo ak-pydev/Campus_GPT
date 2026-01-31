@@ -4,7 +4,7 @@ from tools import FileReadTool, ChromaIngestTool, ChromaSearchTool
 # --- Configuration ---
 # Use Ollama for the agents
 kownledge_llm = LLM(
-    model="ollama/campus-gpt",
+    model="ollama/campus-gpt:latest",
     base_url="http://127.0.0.1:11435",
     api_key="NA"
 )
@@ -38,8 +38,8 @@ student_advisor_agent = Agent(
     If the information is missing, you honestly say you don't know but offer to help find out. 
     You never hallucinate facts.""",
     tools=[ChromaSearchTool()],
-    verbose=True,
-    memory=True, 
+    verbose=False,  # Disabled for faster responses
+    memory=False,  # Disabled for faster responses
     allow_delegation=False,
     llm=kownledge_llm
 )

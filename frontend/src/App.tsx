@@ -4,7 +4,7 @@ import './App.css';
 
 function App() {
   return (
-    <div className="bg-black min-h-screen text-white">
+    <div className="bg-background text-foreground min-h-screen flex items-center justify-center">
       <AnimatedAIChat />
     </div>
   );

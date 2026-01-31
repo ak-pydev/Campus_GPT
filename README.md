@@ -32,8 +32,9 @@ This project integrates several cutting-edge AI technologies and libraries to cr
     *   **Ollama**: Serves the model locally, providing a fast and private inference engine.
 
 ### 5. User Interface
-*   **Tools Used**: `Streamlit`
-*   **Frontend**: A clean, responsive web interface built with Streamlit allows students to easily chat with Campus GPT.
+*   **Status**: Under Development 🚧
+*   **Description**: The frontend interface is currently being designed and implemented.
+
 
 ---
 
@@ -77,10 +78,7 @@ Start the command-line interface:
 ```bash
 uv run python 02_rag_system/main.py qa
 ```
-Or run the web app:
-```bash
-streamlit run 04_deployment/app.py
-```
+
 
 ---
 

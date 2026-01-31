@@ -26,10 +26,10 @@ src/crawler/streamlit/config.toml
 # poetry.lock
 
 # Data files
-*.jsonl
+# *.jsonl
 
 
-campus_data.jsonl
+# campus_data.jsonl
 
 # Models and Weights
 *.gguf

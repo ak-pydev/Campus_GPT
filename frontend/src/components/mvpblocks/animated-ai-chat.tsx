@@ -286,7 +286,7 @@ export default function AnimatedAIChat() {
 
   return (
     <div className="flex w-full overflow-x-hidden">
-      <div className="text-foreground relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-transparent">
+      <div className="text-foreground relative flex min-h-screen w-full flex-col items-center justify-end overflow-hidden bg-transparent pb-12">
         <div className="absolute inset-0 h-full w-full overflow-hidden">
           <div className="bg-primary/10 absolute top-0 left-1/4 h-96 w-96 animate-pulse rounded-full mix-blend-normal blur-[128px] filter" />
           <div className="bg-secondary/10 absolute right-1/4 bottom-0 h-96 w-96 animate-pulse rounded-full mix-blend-normal blur-[128px] filter delay-700" />

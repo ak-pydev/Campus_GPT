@@ -1,4 +1,4 @@
-# Campus GPT 🎓
+# Campus GPT
 
 **Your Intelligent AI Companion for Northern Kentucky University.**
 
@@ -6,7 +6,7 @@ Campus GPT is an advanced, open-source style AI agent designed to assist student
 
 ---
 
-## 🛠️ Concepts & Tools
+## Concepts & Tools
 
 This project integrates several cutting-edge AI technologies and libraries to create a robust student advisor system.
 
@@ -32,13 +32,13 @@ This project integrates several cutting-edge AI technologies and libraries to cr
     *   **Ollama**: Serves the model locally, providing a fast and private inference engine.
 
 ### 5. User Interface
-*   **Status**: Under Development 🚧
+*   **Status**: Under Development
 *   **Description**: The frontend interface is currently being designed and implemented.
 
 
 ---
 
-## 📦 Tech Stack
+## Tech Stack
 
 *   **Language**: Python 3.11+
 *   **LLM**: Llama 3.1 (via Ollama)
@@ -50,7 +50,7 @@ This project integrates several cutting-edge AI technologies and libraries to cr
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 We use `uv` for lightning-fast dependency management.
 
@@ -82,4 +82,4 @@ uv run python 02_rag_system/main.py qa
 
 ---
 
-*Built with ❤️ for the NKU Community.*
+*Built with love for the NKU Community.*

@@ -286,7 +286,7 @@ export default function AnimatedAIChat() {
 
   return (
     <div className="flex w-screen overflow-x-hidden">
-      <div className="text-foreground relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-transparent p-6">
+      <div className="text-foreground relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-transparent">
         <div className="relative flex min-h-screen w-full flex-col overflow-hidden text-sm">
           <div className="absolute top-0 left-0 z-0 h-full w-full opacity-50">
             <Aurora

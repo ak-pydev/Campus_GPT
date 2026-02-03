@@ -9,7 +9,7 @@ load_dotenv()
 
 # Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-INPUT_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "campus_data.jsonl")
+INPUT_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "01_crawling", "combined_campus_data.jsonl")
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "raft_dataset.jsonl")
 MODEL_NAME = "arcee-ai/trinity-large-preview:free"
 
@@ -27,21 +27,40 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY,
 )
 
-def generate_raft_example(text_chunk, retry_count=3):
+def generate_raft_example(data_entry, retry_count=3):
     """
     Generates a RAFT example using Arcee-AI via OpenRouter with reasoning enabled.
+    Now uses structured metadata for better context.
     """
     time.sleep(1)
 
+    text_chunk = data_entry.get("text", "")
+    title = data_entry.get("title", "")
+    section_header = data_entry.get("section_header", "")
+    persona = data_entry.get("persona", "all")
+    source_type = data_entry.get("source_type", "web")
+    
+    # Context includes structured metadata
+    context_info = f"Title: {title}\n"
+    if section_header:
+        context_info += f"Section: {section_header}\n"
+    if source_type == "pdf":
+        pdf_page = data_entry.get("pdf_page", "unknown")
+        context_info += f"Source: PDF (Page {pdf_page})\n"
+    context_info += f"Target Audience: {persona}\n"
+
     prompt = f"""
     You are an expert educational dataset generator. 
-    Your task is to create a high-quality training example for a RAG system based on the following text.
+    Your task is to create a high-quality training example for a RAG system based on the following university content.
     
-    Text Context:
+    Document Metadata:
+    {context_info}
+    
+    Text Content:
     \"\"\"{text_chunk}\"\"\"
     
     Generate a JSON object with the following keys:
-    - "question": A likely student question that can be answered using the text.
+    - "question": A likely student question that can be answered using the text. Make it natural and conversational, as if a real {persona} would ask it.
     - "thought_process": A chain-of-thought step-by-step reasoning on how to find the answer in the text.
     - "answer": A clear, concise, and helpful answer to the question, based ONLY on the text.
     
@@ -62,9 +81,6 @@ def generate_raft_example(text_chunk, retry_count=3):
             
             # The model should output the JSON in the content
             content = response.choices[0].message.content
-            
-            # Optional: Capture reasoning details if we wanted to use them specifically
-            # reasoning = getattr(response.choices[0].message, 'reasoning_details', None)
             
             if not content:
                 print("⚠️ Empty content received.")
@@ -107,6 +123,7 @@ def main():
 
     if not os.path.exists(INPUT_FILE):
         print(f"❌ Input file not found: {INPUT_FILE}")
+        print(f"💡 Tip: Make sure you've run the master scraper to generate combined_campus_data.jsonl")
         return
 
     generated_count = 0
@@ -126,13 +143,31 @@ def main():
                 if len(text_chunk) < 100:
                     continue
 
-                print(f"Processing chunk from: {data.get('url', 'Unknown URL')}...")
+                # Display progress with structured info
+                title = data.get('title', 'Unknown')
+                section = data.get('section_header', '')
+                source_type = data.get('source_type', 'web')
                 
-                raft_entry = generate_raft_example(text_chunk)
+                progress_msg = f"Processing: {title}"
+                if section:
+                    progress_msg += f" - {section}"
+                if source_type == "pdf":
+                    progress_msg += f" (PDF page {data.get('pdf_page', '?')})"
+                print(progress_msg)
+                
+                raft_entry = generate_raft_example(data)
                 
                 if raft_entry and isinstance(raft_entry, dict):
+                    # Include enhanced metadata in RAFT dataset
                     raft_entry["context"] = text_chunk
-                    raft_entry["source_url"] = data.get("url")
+                    raft_entry["source_url"] = data.get("anchor_url", data.get("url"))  # Prefer deep link
+                    raft_entry["title"] = data.get("title")
+                    raft_entry["section_header"] = data.get("section_header")
+                    raft_entry["persona"] = data.get("persona", "all")
+                    raft_entry["source_type"] = data.get("source_type", "web")
+                   
+if data.get("source_type") == "pdf":
+                        raft_entry["pdf_page"] = data.get("pdf_page")
                     
                     outfile.write(json.dumps(raft_entry) + "\n")
                     outfile.flush()
@@ -151,6 +186,11 @@ def main():
                 continue
 
     print(f"\n🎉 Generation Complete! {generated_count} examples saved to {OUTPUT_FILE}")
+    print(f"📊 Dataset includes:")
+    print(f"   - Deep-linked source URLs (anchor URLs)")
+    print(f"   - Persona-tagged questions")
+    print(f"   - Section-level context")
+    print(f"   - PDF page numbers for catalog content")
 
 if __name__ == "__main__":
     main()

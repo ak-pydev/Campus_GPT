@@ -4,7 +4,7 @@ from tools import FileReadTool, ChromaIngestTool, ChromaSearchTool
 # --- Configuration ---
 # Use Ollama for the agents
 kownledge_llm = LLM(
-    model="ollama/campus-gpt:latest",
+    model="ollama/campus-gpt",
     base_url="http://127.0.0.1:11435",
     api_key="NA"
 )

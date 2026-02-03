@@ -1,80 +1,68 @@
 # Campus GPT
 
-**Your Intelligent AI Companion for Northern Kentucky University.**
+**My Intelligent AI Companion for Northern Kentucky University.**
 
-Campus GPT is an advanced, open-source style AI agent designed to assist students by answering questions about university life, academic requirements, and campus policies. It leverages state-of-the-art techniques including **RAG (Retrieval-Augmented Generation)** and **RAFT (Retrieval-Augmented Fine-Tuning)** to provide accurate, context-aware responses.
+Campus GPT goes beyond a simple chatbot. It is a sophisticated, agent-based AI system I've built that can read, understand, and answer questions about university life with high accuracy. By combining **web scraping**, **retrieval-augmented generation (RAG)**, and **large language models**, I bring the campus knowledge base to my fingertips.
 
 ---
 
-## Concepts & Tools
+## System Architecture
 
-This project integrates several cutting-edge AI technologies and libraries to create a robust student advisor system.
+My system is organized into four intelligent modules:
 
-### 1. Data Collection & Processing
-*   **Tools Used**: `crawl4ai`, `BeautifulSoup4`, `Requests`
-*   **Process**: We employ high-performance asynchronous web crawlers (`crawl4ai`) to traverse university domains and extract raw text. This data is cleaned and structured into JSONL formats, serving as the ground truth for our knowledge base.
+### 1. Data Acquisition (`01_crawling`)
 
-### 2. RAG (Retrieval-Augmented Generation)
-*   **Tools Used**: `CrewAI`, `ChromaDB`, `Sentence-Transformers`
-*   **Concept**: RAG allows our AI to "look up" information before answering.
-    *   **Vector Database**: We use **ChromaDB** to index university data.
-    *   **Orchestration**: **CrewAI** manages a team of agents (Ingestion Agent, Student Advisor Agent) that coordinate to search the database and synthesize answers.
+- **The Foundation**: I use specialized web scrapers (using `crawl4ai`) that traverse university domains.
+- **Goal**: Harvest raw text data to build my comprehensive knowledge base.
 
-### 3. RAFT (Retrieval-Augmented Fine-Tuning)
-*   **Tools Used**: `Unsloth`, `Llama 3.1`, `PyTorch`
-*   **Concept**: We don't just use a generic model. We implement **RAFT** techniques to fine-tune **Llama 3.1** on our specific domain data.
-    *   **Fine-Tuning**: Using **Unsloth** for efficient, memory-friendly training (LoRA/QLoRA), we create a model that understands the specific terminology and context of NKU.
+### 2. The Agentic Brain (`02_rag_system`)
 
-### 4. Custom Model Deployment
-*   **Tools Used**: `Ollama`, `Modelfile`
-*   **Concept**: The fine-tuned weights are exported and packaged into a custom GGUF model named `campus-gpt`.
-    *   **Modelfile**: Defines the system prompt, parameters, and template to ensure the model behaves consistently as a helpful campus guide.
-    *   **Ollama**: Serves the model locally, providing a fast and private inference engine.
+- **The Engine**: Powered by **CrewAI**.
+- **How it Works**: I employ autonomous agents—an **Ingestion Agent** to organize data and a **Student Advisor Agent** to answer questions. They work together using **ChromaDB** to ensure every answer is grounded in fact.
 
-### 5. User Interface
-*   **Status**: Under Development
-*   **Description**: The frontend interface is currently being designed and implemented.
+### 3. Fine-Tuning (`03_fine_tuning`)
 
+- **The Personality**: I adapt the Llama 3.1 model to understand the specific "campus dialect" and nuances of university queries.
+
+### 4. User Experience (`04_deployment`)
+
+- **The Interface**: A clean, accessible endpoint for me to interact with the AI.
 
 ---
 
 ## Tech Stack
 
-*   **Language**: Python 3.11+
-*   **LLM**: Llama 3.1 (via Ollama)
-*   **Agents**: CrewAI
-*   **Database**: ChromaDB (Vector Store)
-*   **Crawling**: Crawl4AI
-*   **Fine-Tuning**: Unsloth
-*   **Dependency Management**: `uv`
+- **Framework**: Python 3.11+
+- **Agent Orchestration**: CrewAI
+- **Vector Database**: ChromaDB
+- **LLM Engine**: Ollama (Llama 3.x)
+- **Package Manager**: `uv` (Fast & Modern)
 
 ---
 
 ## Getting Started
 
-We use `uv` for lightning-fast dependency management.
+I use `uv` for lightning-fast dependency management.
 
 ### 1. Setup
+
 ```bash
 pip install uv
 uv sync
 ```
 
-### 2. Build the Model
-Ensure you have Ollama installed and the GGUF file ready.
-```bash
-cd 04_deployment
-ollama create campus-gpt -f Modelfile
-```
+### 2. Build the Knowledge Base
 
-### 3. Injest Data (RAG)
-Populate the vector database with the latest campus data:
+Train the agents on the latest data:
+
 ```bash
 uv run python 02_rag_system/main.py ingest
 ```
 
-### 4. Run the Advisor
-Start the command-line interface:
+### 3. Ask a Question
+
+Start a chat session with the Student Advisor:
+
 ```bash
 uv run python 02_rag_system/main.py qa
 ```
@@ -82,4 +70,4 @@ uv run python 02_rag_system/main.py qa
 
 ---
 
-*Built with love for the NKU Community.*
+_Built for the NKU Community._

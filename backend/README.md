@@ -1,15 +1,15 @@
 # Campus GPT Backend API
 
-FastAPI backend that integrates the CrewAI-based RAG system with the frontend UI.
+My FastAPI backend that integrates the CrewAI-based RAG system with the frontend UI.
 
 ## Features
 
-- 🚀 RESTful API with FastAPI
-- 💬 Chat endpoint for student questions
-- 📡 Server-Sent Events (SSE) for streaming responses
-- 🔍 RAG-powered answers using ChromaDB and Ollama
-- 🏥 Health check endpoint
-- 🌐 CORS enabled for frontend communication
+- RESTful API with FastAPI
+- Chat endpoint for student questions
+- Server-Sent Events (SSE) for streaming responses
+- RAG-powered answers using ChromaDB and Ollama
+- Health check endpoint
+- CORS enabled for frontend communication
 
 ## Prerequisites
 

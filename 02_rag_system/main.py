@@ -7,21 +7,20 @@ from tasks import create_ingest_task, create_qa_task
 def run_ingestion():
     print("\n--- Starting Ingestion Process ---")
     print("Loading combined web + PDF dataset...")
-    file_path = "../01_crawling/combined_campus_data.jsonl"  # Combined dataset
+    
+    # Use absolute path based on this file's location
+    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "01_crawling", "combined_campus_data.jsonl")
     
     # Fallback to old paths if combined doesn't exist
     if not os.path.exists(file_path):
         print(f"⚠️ Combined dataset not found at {file_path}")
         print("Trying legacy path...")
-        file_path = "campus_data.jsonl"
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "campus_data.jsonl")
         
         if not os.path.exists(file_path):
-            if os.path.exists(f"../{file_path}"):
-                file_path = f"../{file_path}"
-            else:
-                print(f"❌ Error: No data file found.")
-                print(f"💡 Run the master scraper first: cd 01_crawling && python master_scraper.py")
-                return
+            print(f"❌ Error: No data file found.")
+            print(f"💡 Run the master scraper first: cd 01_crawling && python master_scraper.py")
+            return
 
     ingest_task = create_ingest_task(file_path)
     crew = Crew(

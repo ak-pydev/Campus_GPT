@@ -22,6 +22,7 @@ dependencies = [
     "openrouter>=0.1.3",
     "notebook>=7.5.3",
     "pymupdf>=1.26.7",
+    "unsloth>=2026.1.4",
 ]
 
 [tool.hatch.build.targets.wheel]

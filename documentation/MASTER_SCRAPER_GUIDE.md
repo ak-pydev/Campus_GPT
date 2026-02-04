@@ -75,6 +75,42 @@ TOTAL TIME: 287.12 seconds
 
 Note: Total time is ~287 seconds instead of 442 seconds (285+156) because they ran in parallel!
 
+## Merge Only Mode
+
+If you've already scraped but want to regenerate the combined dataset (e.g., after updating error filtering):
+
+```bash
+cd 01_crawling
+python master_scraper.py --merge-only
+```
+
+This will:
+
+- Skip re-scraping
+- Filter out error pages (404, "Page Not Found")
+- Regenerate clean `combined_campus_data.jsonl`
+- Show filtered count
+
+```
+============================================================
+MERGE-ONLY MODE: Regenerating Combined Dataset
+============================================================
+
+Loaded 3247 entries from web scraper (35 error pages filtered)
+Loaded 5234 entries from PDF scraper (0 error pages filtered)
+
+Saved 8446 total entries to combined_campus_data.jsonl
+Filtered out 35 error pages
+
+============================================================
+✅ MERGE COMPLETE
+============================================================
+Web entries: 3247
+PDF entries: 5234
+Error pages filtered: 35
+Total valid entries: 8446
+```
+
 ## Alternative: Run Separately
 
 If you prefer to run them separately:
@@ -111,7 +147,9 @@ The `master_scraper.py` is recommended because:
 - **Faster**: Parallel execution saves time
 - **Convenient**: Single command
 - **Auto-merge**: Automatically combines outputs
+- **Error filtering**: Removes 404 and error pages during merge
 - **Better logging**: Comprehensive progress tracking
+- **Merge-only mode**: Quick re-merge without re-scraping
 
 ## Next Steps
 

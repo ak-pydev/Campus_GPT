@@ -65,8 +65,9 @@ class ChromaIngestTool(BaseTool):
 
     def _run(self, file_path: str) -> str:
         try:
-            # Initialize Chroma
-            client = chromadb.PersistentClient(path="./chroma_db")
+            # Initialize Chroma (use absolute path)
+            chroma_path = os.path.join(os.path.dirname(__file__), "chroma_db")
+            client = chromadb.PersistentClient(path=chroma_path)
             collection = client.get_or_create_collection(name="nku_docs")
             
             # Initialize Chunker
@@ -146,7 +147,8 @@ class ChromaSearchTool(BaseTool):
 
     def _run(self, query: str, persona_filter: str = "all") -> str:
         try:
-            client = chromadb.PersistentClient(path="./chroma_db")
+            chroma_path = os.path.join(os.path.dirname(__file__), "chroma_db")
+            client = chromadb.PersistentClient(path=chroma_path)
             collection = client.get_collection(name="nku_docs")
             
             # Build where filter for persona

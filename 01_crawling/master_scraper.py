@@ -70,6 +70,7 @@ def run_pdf_scraper():
 def merge_outputs(web_file="campus_data.jsonl", pdf_file="campus_pdfs.jsonl", output_file="combined_campus_data.jsonl"):
     """
     Merge web scraping and PDF extraction outputs into a single file.
+    Filters out error pages (404, etc.) during the merge process.
     
     Args:
         web_file: Path to web scraping output
@@ -83,22 +84,48 @@ def merge_outputs(web_file="campus_data.jsonl", pdf_file="campus_pdfs.jsonl", ou
     print("MERGING OUTPUTS")
     print("="*60)
     
+    def is_error_page(entry):
+        """Check if entry is an error page (404, etc.)."""
+        title = entry.get("title", "").lower()
+        text = entry.get("text", "").lower()[:200]  # Check first 200 chars
+        
+        error_indicators = [
+            "page not found", "404", "error", 
+            "not available", "does not exist", 
+            "could not be found", "page you requested could not be found"
+        ]
+        
+        return any(ind in title for ind in error_indicators) or \
+               any(ind in text for ind in error_indicators)
+    
     web_entries = []
     pdf_entries = []
+    filtered_web = 0
+    filtered_pdf = 0
     
-    # Load web scraping data
+    # Load web scraping data with filtering
     if Path(web_file).exists():
         with open(web_file, 'r', encoding='utf-8') as f:
-            web_entries = [json.loads(line) for line in f]
-        print(f"Loaded {len(web_entries)} entries from web scraper")
+            for line in f:
+                entry = json.loads(line)
+                if not is_error_page(entry):
+                    web_entries.append(entry)
+                else:
+                    filtered_web += 1
+        print(f"Loaded {len(web_entries)} entries from web scraper ({filtered_web} error pages filtered)")
     else:
         print(f"Warning: {web_file} not found")
     
-    # Load PDF data
+    # Load PDF data (PDFs typically don't have error pages, but check anyway)
     if Path(pdf_file).exists():
         with open(pdf_file, 'r', encoding='utf-8') as f:
-            pdf_entries = [json.loads(line) for line in f]
-        print(f"Loaded {len(pdf_entries)} entries from PDF scraper")
+            for line in f:
+                entry = json.loads(line)
+                if not is_error_page(entry):
+                    pdf_entries.append(entry)
+                else:
+                    filtered_pdf += 1
+        print(f"Loaded {len(pdf_entries)} entries from PDF scraper ({filtered_pdf} error pages filtered)")
     else:
         print(f"Warning: {pdf_file} not found")
     
@@ -111,11 +138,13 @@ def merge_outputs(web_file="campus_data.jsonl", pdf_file="campus_pdfs.jsonl", ou
             f.write(json.dumps(entry) + '\n')
     
     print(f"\nSaved {len(all_entries)} total entries to {output_file}")
+    print(f"Filtered out {filtered_web + filtered_pdf} error pages")
     
     return {
         "web_count": len(web_entries),
         "pdf_count": len(pdf_entries),
         "total_count": len(all_entries),
+        "filtered_count": filtered_web + filtered_pdf,
         "output_file": output_file
     }
 
@@ -139,12 +168,13 @@ def print_summary(results, merge_stats, total_time):
     print(f"\nDATA COLLECTED:")
     print(f"  Web entries: {merge_stats['web_count']}")
     print(f"  PDF entries: {merge_stats['pdf_count']}")
-    print(f"  Total entries: {merge_stats['total_count']}")
+    print(f"  Error pages filtered: {merge_stats.get('filtered_count', 0)}")
+    print(f"  Total valid entries: {merge_stats['total_count']}")
     
     print(f"\nOUTPUT FILES:")
     print(f"  Web: campus_data.jsonl")
     print(f"  PDF: campus_pdfs.jsonl")
-    print(f"  Combined: {merge_stats['output_file']}")
+    print(f"  Combined (clean): {merge_stats['output_file']}")
     
     print(f"\nTOTAL TIME: {total_time:.2f} seconds")
     print("="*60)
@@ -152,6 +182,37 @@ def print_summary(results, merge_stats, total_time):
 
 def main():
     """Main orchestrator: run scrapers in parallel and merge results."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Campus GPT Master Scraper")
+    parser.add_argument("--merge-only", action="store_true", 
+                       help="Only merge existing files (skip scraping)")
+    args = parser.parse_args()
+    
+    if args.merge_only:
+        # Just merge existing files with error filtering
+        print("\n" + "="*60)
+        print("MERGE-ONLY MODE: Regenerating Combined Dataset")
+        print("="*60)
+        
+        merge_stats = merge_outputs()
+        
+        print("\n" + "="*60)
+        print("✅ MERGE COMPLETE")
+        print("="*60)
+        print(f"Web entries: {merge_stats['web_count']}")
+        print(f"PDF entries: {merge_stats['pdf_count']}")
+        print(f"Error pages filtered: {merge_stats.get('filtered_count', 0)}")
+        print(f"Total valid entries: {merge_stats['total_count']}")
+        print(f"\n💾 Saved to: {merge_stats['output_file']}")
+        print("="*60)
+        
+        print("\n💡 Next steps:")
+        print("   1. Re-ingest into ChromaDB: uv run python 02_rag_system/main.py ingest")
+        print("   2. Generate RAFT dataset: cd 03_fine_tuning && python generate_raft_focused.py")
+        return
+    
+    # Normal mode: run scrapers then merge
     print("\n" + "="*60)
     print("CAMPUS GPT MASTER SCRAPER")
     print("Running Web + PDF Scrapers in Parallel")

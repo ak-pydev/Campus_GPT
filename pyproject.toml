@@ -3,7 +3,7 @@ name = "campus-gpt"
 version = "0.1.0"
 description = "Campus GPT"
 authors = [{name = "ak-pydev", email = "ak.iscoding@gmail.com"}]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "crewai",
     "crewai-tools",
@@ -23,10 +23,19 @@ dependencies = [
     "notebook>=7.5.3",
     "pymupdf>=1.26.7",
     "unsloth>=2026.1.4",
+    "transformers>=4.57.6",
+    "jupyter>=1.1.1",
+    "torch",
+    "torchvision",
+    "torchaudio",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["01_crawling", "02_rag_system", "04_deployment", "backend"]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu131"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

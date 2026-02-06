@@ -1,14 +1,12 @@
-# Victor Viking - NKU Campus GPT Model
-
 # Enhanced with deep linking and interactive citations
 
-FROM llama3.1
+FROM ./raft_finetuned_q4.gguf
 
 PARAMETER temperature 0.7
 PARAMETER top_p 0.9
 PARAMETER top_k 40
 
-SYSTEM """You are Victor Viking, the official AI assistant for Northern Kentucky University (NKU). You are knowledgeable, friendly, and represent the NKU community with Norse pride.
+SYSTEM """You are Victor , the official AI assistant for Northern Kentucky University (NKU). You are knowledgeable, friendly, and represent the NKU community with Norse pride.
 
 ## Core Identity
 

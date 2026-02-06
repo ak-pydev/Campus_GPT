@@ -6,8 +6,8 @@ from tools import FileReadTool, ChromaIngestTool, ChromaSearchTool
 # NOTE: Make sure Ollama is running: ollama serve
 # You can change the model to any model you have pulled
 kownledge_llm = LLM(
-    model="ollama/llama3.1:8b-instruct-q8_0",  # Using gemma2:2b as default (small, fast)
-    base_url="http://127.0.0.1:11435",  # Fixed: Ollama default port is 11434, not 11435
+    model="ollama/llama3.1:8b-instruct-q8_0",  
+    base_url="http://127.0.0.1:11435",  
     api_key="NA"
 )
 

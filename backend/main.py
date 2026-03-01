@@ -214,24 +214,10 @@ async def chat_stream(request: ChatRequest):
     async def event_generator() -> AsyncGenerator[str, None]:
         """Generate SSE events"""
         try:
-            # Send initial event
-            yield f"data: {json.dumps({'type': 'start', 'message': 'Processing question...'})}\n\n"
-            
-            # Get answer (this is synchronous, so we'll run it in executor)
-            result = await rag_service.get_answer_async(question)
-            
-            # Stream the answer in chunks
-            answer = result["answer"]
-            chunk_size = 50  # Characters per chunk
-            
-            for i in range(0, len(answer), chunk_size):
-                chunk = answer[i:i + chunk_size]
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-                await asyncio.sleep(0.05)  # Small delay for streaming effect
-            
-            # Send completion event with metadata
-            yield f"data: {json.dumps({'type': 'complete', 'sources': result.get('sources'), 'metadata': result.get('metadata')})}\n\n"
-            
+            # Consume the async generator from the service
+            async for chunk in rag_service.get_answer_stream(question):
+                yield f"data: {json.dumps(chunk)}\n\n"
+                
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
     

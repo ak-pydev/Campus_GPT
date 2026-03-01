@@ -5,13 +5,14 @@ from chromadb.config import Settings
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from typing import Type, List, Dict
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 import uuid
 
 # --- Helper for Manual Chunking (since we aren't using LangChain's chunkers) ---
 class TextChunker:
     def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
-        self.model = SentenceTransformer(model_name)
+        # self.model = SentenceTransformer(model_name) # Unused
+        pass
 
     def split_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """Simple splitting by character count for robustness, can be enhanced."""
@@ -65,10 +66,23 @@ class ChromaIngestTool(BaseTool):
 
     def _run(self, file_path: str) -> str:
         try:
+            import chromadb.utils.embedding_functions as embedding_functions
+            
             # Initialize Chroma (use absolute path)
             chroma_path = os.path.join(os.path.dirname(__file__), "chroma_db")
             client = chromadb.PersistentClient(path=chroma_path)
-            collection = client.get_or_create_collection(name="nku_docs")
+            
+            # Use Ollama embeddings (nomic-embed-text)
+            # We use the explicitly configured host from our environment/debugging
+            ollama_ef = embedding_functions.OllamaEmbeddingFunction(
+                model_name="nomic-embed-text",
+                url="http://127.0.0.1:11435/api/embeddings"
+            )
+            
+            collection = client.get_or_create_collection(
+                name="nku_docs",
+                embedding_function=ollama_ef
+            )
             
             # Initialize Chunker
             chunker = TextChunker()
@@ -78,61 +92,107 @@ class ChromaIngestTool(BaseTool):
             web_count = 0
             pdf_count = 0
             
+            # Batching variables
+            batch_documents = []
+            batch_metadatas = []
+            batch_ids = []
+            BATCH_SIZE = 100
+            
             with open(file_path, 'r', encoding='utf-8') as f:
-                for line in f:
+                for line_idx, line in enumerate(f):
                     if not line.strip(): continue
                     
-                    entry = json.loads(line)
-                    text = entry.get('text', '')
-                    
-                    if not text: continue
-                    
-                    # Extract enhanced metadata
-                    url = entry.get('url', '')
-                    anchor_url = entry.get('anchor_url', url)  # Prefer deep link
-                    title = entry.get('title', '')
-                    section_header = entry.get('section_header')
-                    persona = entry.get('persona', 'all')
-                    source_type = entry.get('source_type', 'web')
-                    header_level = entry.get('header_level')
-                    
-                    # PDF-specific metadata
-                    pdf_page = entry.get('pdf_page')
-                    
-                    # Chunk the text (only if it's large, otherwise keep as-is)
-                    if len(text) > 500:
-                        chunks = chunker.split_text(text)
-                    else:
-                        chunks = [text]
-                    
-                    ids = [str(uuid.uuid4()) for _ in chunks]
-                    
-                    # Enhanced metadata for each chunk
-                    metadatas = [{
-                        "url": url,
-                        "anchor_url": anchor_url,  # Deep link for citations
-                        "title": title,
-                        "section_header": section_header if section_header else "",
-                        "persona": persona,
-                        "source_type": source_type,
-                        "header_level": header_level if header_level else "",
-                        "pdf_page": pdf_page if pdf_page else 0,
-                    } for _ in chunks]
-                    
-                    collection.add(
-                        documents=chunks,
-                        metadatas=metadatas,
-                        ids=ids
-                    )
-                    
-                    count += 1
-                    if source_type == "pdf":
-                        pdf_count += 1
-                    else:
-                        web_count += 1
+                    try:
+                        entry = json.loads(line)
+                        text = entry.get('text', '')
+                        
+                        if not text: continue
+                        
+                        # Extract enhanced metadata
+                        url = entry.get('url', '')
+                        anchor_url = entry.get('anchor_url', url)  # Prefer deep link
+                        title = entry.get('title', '')
+                        section_header = entry.get('section_header')
+                        persona = entry.get('persona', 'all')
+                        source_type = entry.get('source_type', 'web')
+                        header_level = entry.get('header_level')
+                        
+                        # PDF-specific metadata
+                        pdf_page = entry.get('pdf_page')
+                        
+                        # Chunk the text
+                        if len(text) > 500:
+                            chunks = chunker.split_text(text)
+                        else:
+                            chunks = [text]
+                        
+                        # Prepare batch data
+                        for i, chunk in enumerate(chunks):
+                            chunk_id = f"{line_idx}_{i}_{str(uuid.uuid4())}"
+                            
+                            # Safe integer conversion helper (inline for speed)
+                            def safe_int(val, default=0):
+                                try:
+                                    if val is None: return default
+                                    s = str(val).lower().replace('h', '').replace(' ', '')
+                                    return int(float(s))
+                                except:
+                                    return default
+
+                            meta = {
+                                "url": str(url),
+                                "anchor_url": str(anchor_url),
+                                "title": str(title),
+                                "section_header": str(section_header) if section_header is not None else "",
+                                "persona": str(persona),
+                                "source_type": str(source_type),
+                                "header_level": safe_int(header_level),
+                                "pdf_page": safe_int(pdf_page),
+                            }
+                            
+                            batch_documents.append(chunk)
+                            batch_metadatas.append(meta)
+                            batch_ids.append(chunk_id)
+
+                        # Check if batch is full
+                        if len(batch_documents) >= BATCH_SIZE:
+                            collection.add(
+                                documents=batch_documents,
+                                metadatas=batch_metadatas,
+                                ids=batch_ids
+                            )
+                            # Update counts
+                            count += len(batch_ids) # Approximate record count (chunks)
+                            # Clear batch
+                            batch_documents = []
+                            batch_metadatas = []
+                            batch_ids = []
+                            print(f"Processed batch... Total chunks: {count}", flush=True)
+
+                        # Update source counts (approximate based on lines processed)
+                        if source_type == "pdf":
+                            pdf_count += 1
+                        else:
+                            web_count += 1
+                            
+                    except Exception as loop_e:
+                        print(f"❌ Error on line {line_idx}: {loop_e}")
+                        continue
             
-            return f"Successfully ingested {count} entries into ChromaDB ({web_count} web pages, {pdf_count} PDF chunks) with enhanced metadata (anchor URLs, personas, section headers)."
+            # Process remaining items in batch
+            if batch_documents:
+                collection.add(
+                    documents=batch_documents,
+                    metadatas=batch_metadatas,
+                    ids=batch_ids
+                )
+                count += len(batch_ids)
+                print(f"Processed final batch... Total chunks: {count}", flush=True)
+            
+            return f"Successfully ingested {count} entries into ChromaDB ({web_count} web pages, {pdf_count} PDF chunks) with enhanced metadata (anchor URLs, personas, section headers) using nomic-embed-text."
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"Ingestion failed: {str(e)}"
 
 # --- Tool: ChromaDB Search with Enhanced Results ---
@@ -147,9 +207,21 @@ class ChromaSearchTool(BaseTool):
 
     def _run(self, query: str, persona_filter: str = "all") -> str:
         try:
+            import chromadb.utils.embedding_functions as embedding_functions
+
             chroma_path = os.path.join(os.path.dirname(__file__), "chroma_db")
             client = chromadb.PersistentClient(path=chroma_path)
-            collection = client.get_collection(name="nku_docs")
+            
+            # Use Ollama embeddings (nomic-embed-text) matches ingestion
+            ollama_ef = embedding_functions.OllamaEmbeddingFunction(
+                model_name="nomic-embed-text",
+                url="http://127.0.0.1:11435/api/embeddings"
+            )
+
+            collection = client.get_collection(
+                name="nku_docs",
+                embedding_function=ollama_ef
+            )
             
             # Build where filter for persona
             where_filter = None

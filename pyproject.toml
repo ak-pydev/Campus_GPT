@@ -23,6 +23,8 @@ dependencies = [
     "notebook>=7.5.3",
     "pymupdf>=1.26.7",
     "unsloth>=2026.1.4",
+    "fastapi",
+    "uvicorn",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -14,11 +14,12 @@ import {
   Book,
   Utensils,
   Calendar,
-
+  Link as LinkIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as React from 'react';
 import { TextShimmer } from './text-shimmer';
+import ReactMarkdown from 'react-markdown';
 
 
 interface UseAutoResizeTextareaProps {
@@ -135,6 +136,72 @@ interface Message {
   content: string;
   sources?: Array<{ url: string; title: string }>;
 }
+
+const SourceChips = ({ sources }: { sources: Array<{ url: string; title: string }> }) => {
+  if (!sources || sources.length === 0) return null;
+  
+  return (
+    <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-border/50">
+      <p className="text-xs text-muted-foreground font-medium w-full">Sources:</p>
+      {sources.map((source, i) => (
+        <a 
+          key={i} 
+          href={source.url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-[10px] px-2 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-amber-500 hover:text-white rounded-full transition-all flex items-center gap-1 group"
+        >
+          <LinkIcon size={10} className="group-hover:text-white" />
+          {source.title || new URL(source.url).hostname}
+        </a>
+      ))}
+    </div>
+  );
+};
+
+const MessageBubble = ({ message }: { message: Message }) => {
+  // Use a regex to extract the content inside <|thought|> tags
+  const thoughtMatch = message.content.match(/<\|thought\|>([\s\S]*?)<\|answer\|>/);
+  // Also handle closing tag only if starting tag is missing for partial streams
+  const finalAnswerSplit = message.content.split('<|answer|>');
+  let finalAnswer = finalAnswerSplit.length > 1 ? finalAnswerSplit[1] : message.content;
+  
+  // If parsing failed but we see tags, try to clean up
+  if (!thoughtMatch && message.content.includes('<|answer|>')) {
+     finalAnswer = message.content.substring(message.content.indexOf('<|answer|>') + 10);
+  } else if (thoughtMatch) {
+     // If we matched thoughts, the rest is the answer
+     // This logic might need refinement depending on exact stream behavior
+  }
+
+  // Remove <|thought|>... part from final answer if it leaked in
+  if (finalAnswer.includes('<|thought|>')) {
+     finalAnswer = finalAnswer.replace(/<\|thought\|>[\s\S]*?<\|answer\|>/, '');
+  }
+
+  const thoughtContent = thoughtMatch ? thoughtMatch[1].trim() : null;
+
+  return (
+    <div className="space-y-2">
+      {thoughtContent && (
+        <details className="group cursor-pointer mb-2">
+          <summary className="text-xs font-semibold text-amber-600 uppercase tracking-widest list-none flex items-center gap-1">
+             <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+            🧠 View Reasoning Trace
+          </summary>
+          <div className="mt-2 text-sm italic text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-black/20 p-3 rounded border border-amber-100 dark:border-amber-900/30">
+            {thoughtContent}
+          </div>
+        </details>
+      )}
+      <div className="prose prose-slate prose-sm max-w-none dark:prose-invert">
+        <ReactMarkdown>{finalAnswer}</ReactMarkdown>
+      </div>
+      
+      {message.sources && <SourceChips sources={message.sources} />}
+    </div>
+  );
+};
 
 export default function AnimatedAIChat() {
   const [value, setValue] = useState('');
@@ -280,9 +347,15 @@ export default function AnimatedAIChat() {
       setIsTyping(true);
     });
 
+    // Create a new assistant message placeholder
+    setMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: '', sources: [] }
+    ]);
+
     try {
-      // Call FastAPI backend
-      const response = await fetch('http://localhost:8000/api/chat', {
+      // Call FastAPI backend with streaming
+      const response = await fetch('http://localhost:8000/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -297,29 +370,79 @@ export default function AnimatedAIChat() {
         throw new Error(errorData.error || 'Failed to get response');
       }
 
-      const data = await response.json();
+      if (!response.body) {
+        throw new Error('ReadableStream not supported by browser.');
+      }
 
-      // Add assistant message to chat
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: data.answer,
-          sources: data.sources,
-        },
-      ]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessageContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            if (!dataStr) continue;
+            
+            try {
+              const data = JSON.parse(dataStr);
+              
+              if (data.type === 'start') {
+                // Keep the typing clean
+              } else if (data.type === 'chunk') {
+                assistantMessageContent += data.content;
+                
+                // Update the last message (the assistant's)
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastMessage = newMessages[newMessages.length - 1];
+                  if (lastMessage.role === 'assistant') {
+                    lastMessage.content = assistantMessageContent;
+                  }
+                  return newMessages;
+                });
+                
+                setIsTyping(false); // Stop "Thinking..." animation once we have first chunk
+                
+              } else if (data.type === 'complete') {
+                // Update with final sources
+                 setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastMessage = newMessages[newMessages.length - 1];
+                  if (lastMessage.role === 'assistant') {
+                    lastMessage.content = assistantMessageContent; // Ensure full content
+                    lastMessage.sources = data.sources;
+                  }
+                  return newMessages;
+                });
+              } else if (data.type === 'error') {
+                 throw new Error(data.message);
+              }
+            } catch (e) {
+              console.error("Error parsing SSE data", e);
+            }
+          }
+        }
+      }
+
     } catch (err) {
       console.error('Chat error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to send message');
-      
-      // Add error message to chat
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Sorry, I encountered an error: ${err instanceof Error ? err.message : 'Unknown error'}. Please make sure the backend is running.`,
-        },
-      ]);
+      // Update the last assistant message to show error
+      setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          // Only replace content if it was the generated one being streamed
+          if (lastMessage.role === 'assistant') {
+              lastMessage.content = `Sorry, I encountered an error: ${err instanceof Error ? err.message : 'Unknown error'}. Please make sure the backend is running.`;
+          }
+          return newMessages;
+      });
     } finally {
       setIsTyping(false);
     }
@@ -359,7 +482,7 @@ export default function AnimatedAIChat() {
           >
             {/* Messages Display */}
             {messages.length > 0 && (
-              <div className="mb-8 space-y-4 max-h-[400px] overflow-y-auto px-4">
+              <div className="mb-8 space-y-4 max-h-[400px] overflow-y-auto px-4 custom-scrollbar">
                 {messages.map((message, index) => (
                   <motion.div
                     key={index}
@@ -379,24 +502,12 @@ export default function AnimatedAIChat() {
                           <Sparkles className="text-primary h-4 w-4" />
                         </div>
                       )}
-                      <div className="flex-1 space-y-2">
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                        {message.sources && message.sources.length > 0 && (
-                          <div className="space-y-1 pt-2 border-t border-border/50">
-                            <p className="text-xs text-muted-foreground font-medium">Sources:</p>
-                            {message.sources.map((source, idx) => (
-                              <a
-                                key={idx}
-                                href={source.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline block"
-                              >
-                                {source.title || source.url}
-                              </a>
-                            ))}
-                          </div>
-                        )}
+                      <div className="flex-1 w-full overflow-hidden">
+                         {message.role === 'user' ? (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                         ) : (
+                            <MessageBubble message={message} />
+                         )}
                       </div>
                     </div>
                   </motion.div>
